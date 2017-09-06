@@ -28,10 +28,10 @@ int server_run(const server_config *cf, uv_loop_t *loop)
     return 0;
 }
 
-void udp_proxy_init(server_config* udp_config)
+void udp_proxy_init(server_config* udp_config, uv_loop_t *loop)
 {
-    uv_udp_init(uv_default_loop(), &recv_socket);
-    uv_udp_init(uv_default_loop(), &send_socket);
+    uv_udp_init(loop, &recv_socket);
+    uv_udp_init(loop, &send_socket);
     struct sockaddr_in recv_addr;
     uv_ip4_addr(udp_config->bind_host, udp_config->bind_port, &recv_addr);
     uv_udp_bind(&recv_socket, (const struct sockaddr *)&recv_addr, UV_UDP_REUSEADDR);

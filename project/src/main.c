@@ -17,12 +17,15 @@
 #define DEFAULT_BIND_PORT     8000
 #define DEFAULT_LOG_LEVEL     LOGGER_LEVEL_INFO
 
+uv_loop_t *loop;
+
 static void parse_opts(server_config *cf);
 
 int main(int argc, char **argv)
 {
     server_config config;
     int err;
+    loop = uv_default_loop();
 
     memset(&config, 0, sizeof(config));
     config.bind_host = DEFAULT_BIND_HOST;
@@ -38,9 +41,9 @@ int main(int argc, char **argv)
 
     getConfigFromFile(&udp_config);
 
-    udp_proxy_init(&udp_config);
+    udp_proxy_init(&udp_config, loop);
 
-    err = server_run(&config, uv_default_loop());
+    err = server_run(&config, loop);
     if (err) {
       exit(1);
     }
