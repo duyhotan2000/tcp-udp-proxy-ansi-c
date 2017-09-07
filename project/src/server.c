@@ -5,11 +5,11 @@
  */
 
 #include "server.h"
-#include "type.h"
 #include <netinet/in.h>  /* INET6_ADDRSTRLEN */
 #include <stdlib.h>
 #include <string.h>
 #include "config.h"
+#include "timer.h"
 
 #ifndef INET6_ADDRSTRLEN
 # define INET6_ADDRSTRLEN 63
@@ -25,6 +25,9 @@ int server_run(const server_config *cf, uv_loop_t *loop)
 
     udp_proxy_run(loop);
 
+    timer_run(loop);
+
+    uv_run(loop, UV_RUN_DEFAULT);
     return 0;
 }
 
@@ -39,8 +42,7 @@ void udp_proxy_init(server_config* udp_config, uv_loop_t *loop)
 
 void udp_proxy_run(uv_loop_t* loop)
 {
-    uv_udp_recv_start(&recv_socket, alloc_buffer, udp_package_received);
-    uv_run(loop, UV_RUN_DEFAULT);
+    uv_udp_recv_start(&recv_socket, alloc_buffer, udp_package_received_cb);
 }
 
 void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
@@ -49,19 +51,17 @@ void alloc_buffer(uv_handle_t *handle, size_t suggested_size, uv_buf_t *buf)
   buf->len = suggested_size;
 }
 
-void udp_package_received(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
+void udp_package_received_cb(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf, const struct sockaddr *addr, unsigned flags)
 {
-    if (nread < 0)
+    if (nread <= 0)
     {
-        printf("Read error %s\n", uv_err_name(nread));
-        uv_close((uv_handle_t*) req, NULL);
+        //Read Error or Nothing to read or an Empty UDP package received
         free(buf->base);
         return;
     }
 
     uv_buf_t clonedBuff;
     alloc_buffer(NULL, nread, &clonedBuff);
-    memset(clonedBuff.base, 0, clonedBuff.len);
     memcpy(clonedBuff.base, buf->base, nread);
 
     struct sockaddr_in clientList;
@@ -70,15 +70,14 @@ void udp_package_received(uv_udp_t *req, ssize_t nread, const uv_buf_t *buf, con
     char i = 0;
     for(; i< totalClients ; ++i)
     {
-        uv_udp_send(&send_req, &send_socket, &clonedBuff, 1, (const struct sockaddr *)&clientList, udp_package_sent);
+        uv_udp_send(&send_req, &send_socket, &clonedBuff, 1, (const struct sockaddr *)&clientList, udp_package_sent_cb);
     }
 
     free(buf->base);
     free(clonedBuff.base);
-    uv_udp_recv_stop(req);
 }
 
-void udp_package_sent(uv_udp_send_t *req, int status)
+void udp_package_sent_cb(uv_udp_send_t *req, int status)
 {
     if (status)
     {
@@ -88,6 +87,4 @@ void udp_package_sent(uv_udp_send_t *req, int status)
     {
         fprintf(stderr, "Send Done\n");
     }
-
-    uv_udp_recv_start(&recv_socket, alloc_buffer, udp_package_received);
 }
